@@ -1,110 +1,126 @@
 import requests
-import threading
+import warnings
+from urllib3.exceptions import InsecureRequestWarning
+from requests.exceptions import RequestException, Timeout
 import os
-from concurrent.futures import ThreadPoolExecutor
-from colorama import init, Fore
+import threading
+import time
 import pyfiglet
+from colorama import Fore
 
-init(autoreset=True)
+# Menonaktifkan InsecureRequestWarning (Peringatan SSL)
+warnings.simplefilter('ignore', InsecureRequestWarning)
 
+# ASCII Art dan informasi GitHub
 ascii_art = pyfiglet.figlet_format("CMS CHECKER V1")
-print(Fore.CYAN + ascii_art + Fore.YELLOW + "GitHub: https://github.com/pengodehandal/Mass-CMS-Checker/")
+print(Fore.CYAN + ascii_art)
+print(Fore.YELLOW + "GitHub: https://github.com/pengodehandal/Mass-CMS-Checker/")
 
-print(Fore.GREEN + "\nTools ini adalah tools untuk mengecek CMS seperti:")
-print(Fore.GREEN + "WordPress, Joomla, Magento, Drupal, PrestaShop, Laravel, Shopify, Wix, SquareSpace, Ghost, Typo3, Craft CMS, Hugo.")
-print(Fore.YELLOW + "Harap gunakan tools ini dengan bijak ya!\n")
+# Penjelasan tentang tools
+print(Fore.GREEN + "Tools ini adalah alat untuk mengecek CMS (Content Management System) website.")
+print(Fore.GREEN + "CMS yang dideteksi: WordPress, Joomla, Magento, Drupal, PrestaShop, Laravel, Shopify, dll.")
+print(Fore.RED + "Harap gunakan tools ini dengan bijak. 💻🔍")
 
-cms_dict = {
-    'WordPress': ['/wp-content/', '/wp-includes/', '/wp-admin/'],
-    'Joomla': ['/administrator/', '/components/com_'],
-    'Magento': ['/admin/'],
-    'Drupal': ['/user/login', '/node/add'],
-    'PrestaShop': ['/modules/'],
-    'Laravel': ['/vendor/', '/artisan'],
-    'Shopify': ['/collections/'],
-    'Wix': ['/static/'],
-    'Squarespace': ['/config/'],
-    'Ghost': ['/ghost/'],
-    'Typo3': ['/typo3/'],
-    'Craft CMS': ['/craft/'],
-    'Hugo': ['/index.html'],
-}
-
-cms_count = {cms: 0 for cms in cms_dict}
-cms_count['No CMS'] = 0
-
-def detect_cms(website):
+# Fungsi untuk deteksi CMS
+def check_cms(url):
     try:
-        if not website.startswith('http://') and not website.startswith('https://'):
-            website = 'http://' + website
+        # Mengirim request dengan timeout 3 detik dan non-verify SSL
+        response = requests.get(url, timeout=3, verify=False)
+        
+        # Jika status code 200, lanjutkan deteksi CMS
+        if response.status_code == 200:
+            print(Fore.GREEN + f"Website {url} berhasil diakses. Deteksi CMS sedang dilakukan...")
+            return detect_cms(url, response.text)
+        else:
+            print(Fore.YELLOW + f"Website {url} mengembalikan status {response.status_code}.")
+            return None
+    except Timeout:
+        # Menangani timeout
+        print(Fore.RED + f"Website {url} tidak merespons dalam waktu yang ditentukan. Timeout.")
+        return None
+    except RequestException as e:
+        # Menangani exception lain
+        print(Fore.RED + f"Error saat mencoba mengakses {url}: {e}")
+        return None
 
-        response = requests.get(website, timeout=3, verify=False)
+# Fungsi deteksi CMS
+def detect_cms(url, html_content):
+    cms = None
+    if '/wp-content/' in html_content:
+        cms = 'WordPress'
+    elif '/administrator/' in html_content:
+        cms = 'Joomla'
+    elif '/shop/' in html_content:
+        cms = 'Magento'
+    elif '/wp-admin/' in html_content:
+        cms = 'WordPress'
+    elif '/drupal/' in html_content:
+        cms = 'Drupal'
+    elif '/presta/' in html_content:
+        cms = 'PrestaShop'
+    elif 'Laravel' in html_content:
+        cms = 'Laravel'
+    # Tambahkan logika deteksi CMS lainnya jika diperlukan
 
-        if response.status_code != 200:
-            print(f"{Fore.RED}{website}: {Fore.YELLOW}Error - Status Code {response.status_code}")
-            save_to_file('No CMS', website)
-            return
+    if cms:
+        print(Fore.CYAN + f"{url}: {cms}")
+        save_to_file(cms, url)
+    else:
+        print(Fore.RED + f"{url}: Tidak dapat menemukan CMS.")
 
-        for cms_name, paths in cms_dict.items():
-            for path in paths:
-                if path in response.text:
-                    print(f"{Fore.GREEN}{website}: {Fore.CYAN}{cms_name} Detected")
-                    save_to_file(cms_name, website)
-                    cms_count[cms_name] += 1
-                    return
+    return cms
 
-        print(f"{Fore.RED}{website}: {Fore.YELLOW}No CMS detected or site might be custom-built.")
-        save_to_file('No CMS', website)
-        cms_count['No CMS'] += 1
-    except requests.exceptions.RequestException as e:
-        print(f"{Fore.RED}{website}: {Fore.YELLOW}Error - {e}")
-
-def save_to_file(cms_name, website):
-    file_name = cms_name.lower().replace(" ", "_") + '.txt'
-
-    if not is_duplicate(file_name, website):
-        with open(file_name, 'a') as f:
-            f.write(website + '\n')
-
-def is_duplicate(file_name, website):
-    if not os.path.exists(file_name):
-        return False
-
-    with open(file_name, 'r') as f:
-        existing_websites = f.readlines()
-
-    return website + '\n' in existing_websites
-
-def check_websites_from_file(file_name, threads):
-    with open(file_name, 'r') as f:
-        websites = f.readlines()
-
-    websites = list(set(website.strip() for website in websites))
-
-    with ThreadPoolExecutor(max_workers=threads) as executor:
-        executor.map(detect_cms, websites)
-
-def main():
-    print(f"{Fore.GREEN}Welcome to the CMS Checker Tool!")
-    print(f"{Fore.GREEN}Please provide the list of websites to check in a text file.")
-    file_name = input(f"{Fore.YELLOW}Enter the file name (e.g., websites.txt): ")
-    threads = input(f"{Fore.YELLOW}Enter number of threads (default 10): ")
+# Fungsi untuk menyimpan hasil ke file sesuai CMS
+def save_to_file(cms, url):
+    filename = f"{cms.lower()}.txt"
     
-    if not threads:
-        threads = 10
+    # Membuka file untuk menambahkan URL
+    if os.path.exists(filename):
+        with open(filename, "a") as file:
+            file.write(url + "\n")
     else:
-        threads = int(threads)
+        with open(filename, "w") as file:
+            file.write(url + "\n")
 
-    if os.path.exists(file_name):
-        print(f"{Fore.GREEN}Starting the CMS detection process...")
-        check_websites_from_file(file_name, threads)
-        print(f"{Fore.GREEN}CMS detection completed.")
+# Fungsi untuk memproses daftar website dari file
+def process_websites(file_name, threads=10):
+    with open(file_name, 'r') as f:
+        websites = [line.strip() for line in f.readlines() if line.strip()]
+    
+    print(Fore.YELLOW + f"Mulai pengecekan {len(websites)} website dengan {threads} threads...")
+    
+    # Membagi task ke beberapa threads
+    def check_in_thread(urls):
+        for url in urls:
+            if url:
+                check_cms(url)
 
-        print(f"\n{Fore.GREEN}Total CMS Detection Summary:")
-        for cms_name, count in cms_count.items():
-            print(f"{Fore.CYAN}{cms_name}: {Fore.YELLOW}{count}")
-    else:
-        print(f"{Fore.RED}File '{file_name}' not found. Please provide a valid file.")
+    # Membagi URL menjadi beberapa bagian berdasarkan jumlah thread
+    websites_per_thread = len(websites) // threads
+    threads_list = []
 
-if __name__ == '__main__':
+    for i in range(threads):
+        start = i * websites_per_thread
+        end = start + websites_per_thread if i < threads - 1 else len(websites)
+        thread = threading.Thread(target=check_in_thread, args=(websites[start:end],))
+        threads_list.append(thread)
+        thread.start()
+
+    # Menunggu semua threads selesai
+    for thread in threads_list:
+        thread.join()
+
+    print(Fore.GREEN + "Pengecekan CMS selesai.")
+
+# Main function untuk menjalankan tools
+def main():
+    # Input file dan thread
+    file_name = input(Fore.YELLOW + "Masukkan nama file daftar website (misal: websites.txt): ")
+    threads = input(Fore.YELLOW + "Masukkan jumlah threads (default: 10): ")
+    threads = int(threads) if threads else 10
+    
+    process_websites(file_name, threads)
+
+# Jalankan tools
+if __name__ == "__main__":
     main()
