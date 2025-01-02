@@ -3,11 +3,13 @@ import warnings
 from urllib3.exceptions import InsecureRequestWarning
 from requests.exceptions import RequestException, Timeout, ConnectionError
 import os
-import threading
+import concurrent.futures
 import time
 import pyfiglet
 from colorama import Fore
 from urllib.parse import urlparse
+import signal
+import sys
 
 warnings.simplefilter('ignore', InsecureRequestWarning)
 
@@ -18,71 +20,74 @@ print(Fore.GREEN + "Tools ini adalah alat untuk mengecek CMS (Content Management
 print(Fore.GREEN + "CMS yang dideteksi: WordPress, Joomla, Magento, Drupal, PrestaShop, Laravel, Shopify, dll.")
 print(Fore.RED + "Harap gunakan tools ini dengan bijak. 💻🔍")
 
+def signal_handler(sig, frame):
+    print(Fore.GREEN + "\nTerima kasih telah menggunakan tools ini! Sampai jumpa!")
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
+
 def add_scheme(url):
     parsed_url = urlparse(url)
     if not parsed_url.scheme:
         return f'http://{url}'
     return url
 
-def check_cms(url):
+def check_cms(url, session):
     url = add_scheme(url)
     
     try:
-        response = requests.get(url, timeout=3, verify=False)
-        
+        response = session.get(url, timeout=3, verify=False)  # Timeout set to 3 seconds
         if response.status_code == 200:
-            print(Fore.GREEN + f"Website {url} berhasil diakses. Deteksi CMS sedang dilakukan...")
-            return detect_cms(url, response.text)
+            detect_cms(url, response.text)
         else:
-            print(Fore.YELLOW + f"Website {url} mengembalikan status {response.status_code}.")
-            return None
-    except Timeout:
-        print(Fore.RED + f"Website {url} tidak merespons dalam waktu yang ditentukan. Timeout.")
-        return None
-    except RequestException as e:
-        print(Fore.RED + f"Error saat mencoba mengakses {url}: {str(e)}")
-        return None
-    except ConnectionError:
-        print(Fore.RED + f"Website {url} tidak dapat dijangkau. Cek koneksi atau DNS.")
-        return None
-    except Exception as e:
-        print(Fore.RED + f"Terjadi kesalahan saat mencoba mengakses {url}: {str(e)}")
-        return None
+            print(Fore.RED + f"{url} > Tidak Dapat Menemukan CMS")
+    except (Timeout, RequestException, ConnectionError, Exception):
+        print(Fore.RED + f"{url} > Tidak Dapat Menemukan CMS")
 
 def detect_cms(url, html_content):
     cms = None
     if '/wp-content/' in html_content:
         cms = 'WordPress'
+        color = Fore.BLUE
     elif '/administrator/' in html_content:
         cms = 'Joomla'
+        color = Fore.GREEN
     elif '/shop/' in html_content:
         cms = 'Magento'
+        color = Fore.MAGENTA
     elif '/wp-admin/' in html_content:
         cms = 'WordPress'
+        color = Fore.BLUE
     elif '/drupal/' in html_content:
         cms = 'Drupal'
+        color = Fore.CYAN
     elif '/presta/' in html_content:
         cms = 'PrestaShop'
+        color = Fore.YELLOW
     elif 'Laravel' in html_content:
         cms = 'Laravel'
+        color = Fore.RED
+    elif 'Shopify' in html_content:
+        cms = 'Shopify'
+        color = Fore.BLUE
+    elif 'ghost' in html_content:
+        cms = 'Ghost'
+        color = Fore.MAGENTA
+    elif 'hubspot' in html_content:
+        cms = 'HubSpot'
+        color = Fore.LIGHTGREEN_EX
 
     if cms:
-        print(Fore.CYAN + f"{url}: {cms}")
+        print(f"{color}{url} > CMS > {cms}")
         save_to_file(cms, url)
     else:
-        print(Fore.RED + f"{url}: Tidak dapat menemukan CMS.")
-
-    return cms
+        print(Fore.RED + f"{url} > Tidak Dapat Menemukan CMS")
 
 def save_to_file(cms, url):
     filename = f"{cms.lower()}.txt"
     
-    if os.path.exists(filename):
-        with open(filename, "a") as file:
-            file.write(url + "\n")
-    else:
-        with open(filename, "w") as file:
-            file.write(url + "\n")
+    with open(filename, "a") as file:
+        file.write(url + "\n")
 
 def process_websites(file_name, threads=10):
     with open(file_name, 'r') as f:
@@ -90,23 +95,9 @@ def process_websites(file_name, threads=10):
     
     print(Fore.YELLOW + f"Mulai pengecekan {len(websites)} website dengan {threads} threads...")
     
-    def check_in_thread(urls):
-        for url in urls:
-            if url:
-                check_cms(url)
-
-    websites_per_thread = len(websites) // threads
-    threads_list = []
-
-    for i in range(threads):
-        start = i * websites_per_thread
-        end = start + websites_per_thread if i < threads - 1 else len(websites)
-        thread = threading.Thread(target=check_in_thread, args=(websites[start:end],))
-        threads_list.append(thread)
-        thread.start()
-
-    for thread in threads_list:
-        thread.join()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
+        session = requests.Session()  # Reuse connection
+        executor.map(lambda url: check_cms(url, session), websites)
 
     print(Fore.GREEN + "Pengecekan CMS selesai.")
 
@@ -119,4 +110,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
