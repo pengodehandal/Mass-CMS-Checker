@@ -8,30 +8,27 @@ import time
 import pyfiglet
 from colorama import Fore
 from urllib.parse import urlparse
-import signal
 import sys
 
+# Mengabaikan peringatan terkait SSL (InsecureRequestWarning)
 warnings.simplefilter('ignore', InsecureRequestWarning)
 
+# ASCII art dan intro
 ascii_art = pyfiglet.figlet_format("CMS CHECKER V1")
 print(Fore.CYAN + ascii_art)
 print(Fore.YELLOW + "GitHub: https://github.com/pengodehandal/Mass-CMS-Checker/")
 print(Fore.GREEN + "Tools ini adalah alat untuk mengecek CMS (Content Management System) website.")
-print(Fore.GREEN + "CMS yang dideteksi: WordPress, Joomla, Magento, Drupal, PrestaShop, Laravel, Shopify, dll.")
+print(Fore.GREEN + "CMS yang dideteksi: WordPress, Joomla, Magento, Drupal, PrestaShop, Laravel, Shopify, ZBlog, dll.")
 print(Fore.RED + "Harap gunakan tools ini dengan bijak.")
 
-def signal_handler(sig, frame):
-    print(Fore.GREEN + "\nTerima kasih telah menggunakan tools ini! Sampai jumpa!")
-    sys.exit(0)
-
-signal.signal(signal.SIGINT, signal_handler)
-
+# Menambahkan skema 'http://' jika tidak ada
 def add_scheme(url):
     parsed_url = urlparse(url)
     if not parsed_url.scheme:
         return f'http://{url}'
     return url
 
+# Fungsi utama untuk memeriksa CMS
 def check_cms(url, session):
     url = add_scheme(url)
     
@@ -44,8 +41,12 @@ def check_cms(url, session):
     except (Timeout, RequestException, ConnectionError, Exception):
         print(Fore.RED + f"{url} > Tidak Dapat Menemukan CMS")
 
+# Fungsi untuk mendeteksi CMS
 def detect_cms(url, html_content):
     cms = None
+    color = None
+
+    # Deteksi CMS yang umum
     if '/wp-content/' in html_content:
         cms = 'WordPress'
         color = Fore.BLUE
@@ -76,19 +77,26 @@ def detect_cms(url, html_content):
     elif 'hubspot' in html_content:
         cms = 'HubSpot'
         color = Fore.LIGHTGREEN_EX
+    # Deteksi ZBlog
+    elif '/zb_system/' in html_content:
+        cms = 'ZBlog'
+        color = Fore.CYAN
 
+    # Menampilkan hasil deteksi CMS
     if cms:
         print(f"{color}{url} > CMS > {cms}")
         save_to_file(cms, url)
     else:
         print(Fore.RED + f"{url} > Tidak Dapat Menemukan CMS")
 
+# Menyimpan hasil ke dalam file
 def save_to_file(cms, url):
     filename = f"{cms.lower()}.txt"
     
     with open(filename, "a") as file:
         file.write(url + "\n")
 
+# Fungsi untuk memproses daftar website
 def process_websites(file_name, threads=10):
     with open(file_name, 'r') as f:
         websites = [line.strip() for line in f.readlines() if line.strip()]
@@ -101,6 +109,7 @@ def process_websites(file_name, threads=10):
 
     print(Fore.GREEN + "Pengecekan CMS selesai.")
 
+# Fungsi utama
 def main():
     file_name = input(Fore.YELLOW + "Masukkan nama file daftar website (misal: websites.txt): ")
     threads = input(Fore.YELLOW + "Masukkan jumlah threads (default: 10): ")
@@ -108,5 +117,6 @@ def main():
     
     process_websites(file_name, threads)
 
+# Menjalankan program
 if __name__ == "__main__":
     main()
