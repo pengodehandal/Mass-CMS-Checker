@@ -18,7 +18,7 @@ print(Fore.CYAN + ascii_art)
 print(Fore.YELLOW + "GitHub: https://github.com/pengodehandal/Mass-CMS-Checker/")
 print(Fore.GREEN + "Tools ini adalah alat untuk mengecek CMS (Content Management System) website.")
 print(Fore.GREEN + "CMS yang dideteksi: WordPress, Joomla, Magento, Drupal, PrestaShop, Laravel, Shopify, dll.")
-print(Fore.RED + "Harap gunakan tools ini dengan bijak. 💻🔍")
+print(Fore.RED + "Harap gunakan tools ini dengan bijak.")
 
 def signal_handler(sig, frame):
     print(Fore.GREEN + "\nTerima kasih telah menggunakan tools ini! Sampai jumpa!")
